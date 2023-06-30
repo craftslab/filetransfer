@@ -10,11 +10,13 @@ import (
 	"runtime/pprof"
 
 	"google.golang.org/grpc"
-
 	"google.golang.org/grpc/credentials"
 
 	"github.com/craftslab/filetransfer/server/api"
+	_grpc "github.com/craftslab/filetransfer/server/grpc"
+	"github.com/craftslab/filetransfer/server/print"
 	pb "github.com/craftslab/filetransfer/server/protobuf"
+	"github.com/craftslab/filetransfer/server/ssh"
 )
 
 const ProgramName = "server"
@@ -22,26 +24,27 @@ const ProgramName = "server"
 func main() {
 
 	myflags := flag.NewFlagSet(ProgramName, flag.ExitOnError)
-	cfg := &ServerConfig{}
+	cfg := &_grpc.ServerConfig{}
 	cfg.DefineFlags(myflags)
 	cfg.SkipEncryption = true
 
-	sshegoCfg := setupSshFlags(myflags)
+	sshegoCfg := ssh.SetupSshFlags(myflags)
 
 	args := os.Args[1:]
-	err := myflags.Parse(args)
+	if err := myflags.Parse(args); err != nil {
+		log.Fatalf("%s parse args error: '%s'", ProgramName, err)
+	}
 
 	if cfg.CpuProfilePath != "" {
 		f, err := os.Create(cfg.CpuProfilePath)
 		if err != nil {
 			log.Fatal(err)
 		}
-		pprof.StartCPUProfile(f)
+		_ = pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
 	}
 
-	err = cfg.ValidateConfig()
-	if err != nil {
+	if err := cfg.ValidateConfig(); err != nil {
 		log.Fatalf("%s command line flag error: '%s'", ProgramName, err)
 	}
 
@@ -52,7 +55,7 @@ func main() {
 		gRpcBindPort = cfg.ExternalLsnPort
 		gRpcHost = cfg.Host
 
-		p("gRPC with TLS listening on %v:%v", gRpcHost, gRpcBindPort)
+		print.P("gRPC with TLS listening on %v:%v", gRpcHost, gRpcBindPort)
 
 	} else if cfg.SkipEncryption {
 		// no encryption at all
@@ -64,7 +67,7 @@ func main() {
 		gRpcBindPort = cfg.InternalLsnPort
 		gRpcHost = "127.0.0.1" // local only, behind the SSHD
 
-		p("external SSHd listening on %v:%v, internal gRPC service listening on 127.0.0.1:%v", cfg.Host, cfg.ExternalLsnPort, cfg.InternalLsnPort)
+		print.P("external SSHd listening on %v:%v, internal gRPC service listening on 127.0.0.1:%v", cfg.Host, cfg.ExternalLsnPort, cfg.InternalLsnPort)
 
 	}
 
@@ -84,20 +87,22 @@ func main() {
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
 	} else if cfg.SkipEncryption {
 		// no encryption
-		p("server configured to skip encryption.")
+		print.P("server configured to skip encryption.")
 	} else {
 
 		// use SSH
-		err = serverSshMain(sshegoCfg, cfg.Host,
+		err = ssh.ServerSshMain(sshegoCfg, cfg.Host,
 			cfg.ExternalLsnPort, cfg.InternalLsnPort)
-		panicOn(err)
+		print.PanicOn(err)
 	}
 
 	peer := NewPeerMemoryOnly()
 
 	grpcServer := grpc.NewServer(opts...)
-	pb.RegisterPeerServer(grpcServer, NewPeerServerClass(peer, cfg))
-	grpcServer.Serve(lis)
+	pb.RegisterPeerServer(grpcServer, _grpc.NewPeerServerClass(peer, cfg))
+	if err := grpcServer.Serve(lis); err != nil {
+		log.Fatalf("failed to run grpcserver: %v", err)
+	}
 }
 
 func NewPeerMemoryOnly() *PeerMemoryOnly {

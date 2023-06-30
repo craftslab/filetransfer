@@ -10,20 +10,48 @@ import (
 	"log"
 	"net"
 	"os"
-	"runtime/pprof"
 	"sync"
 	"time"
 
+	tun "github.com/devops-filetransfer/sshego"
+	"github.com/glycerine/bchan"
+	"github.com/glycerine/blake2b" // vendor https://github.com/dchest/blake2b"
+	"github.com/glycerine/idem"
 	"google.golang.org/grpc"
 
-	"github.com/glycerine/blake2b" // vendor https://github.com/dchest/blake2b"
-
-	"google.golang.org/grpc/credentials"
-
 	"github.com/craftslab/filetransfer/server/api"
+	"github.com/craftslab/filetransfer/server/exists"
+	"github.com/craftslab/filetransfer/server/print"
 	pb "github.com/craftslab/filetransfer/server/protobuf"
-	"github.com/glycerine/bchan"
 )
+
+type ServerConfig struct {
+	MyID string
+	Host string // ip address
+
+	// by default, we use SSH
+	UseTLS bool
+
+	// For when your VPN already provides encryption.
+	SkipEncryption bool // turn off both SSH and TLS.
+
+	CertPath string
+	KeyPath  string
+
+	ExternalLsnPort int
+	InternalLsnPort int
+	CpuProfilePath  string
+
+	SshegoCfg *tun.SshegoConfig
+
+	ServerGotGetReply   chan *api.BcastGetReply
+	ServerGotSetRequest chan *api.BcastSetRequest
+
+	Halt *idem.Halter
+
+	GrpcServer *grpc.Server
+	Cls        *PeerServerClass
+}
 
 type PeerServerClass struct {
 	lgs                api.LocalGetSet
@@ -50,8 +78,7 @@ func (s *PeerServerClass) IncrementGotFileCount() {
 }
 
 // implement pb.PeerServer interface; the server is receiving a file here,
-//  because the client called SendFile() on the other end.
-//
+// because the client called SendFile() on the other end.
 func (s *PeerServerClass) SendFile(stream pb.Peer_SendFileServer) (err error) {
 	log.Printf("%s peer.Server SendFile (for receiving a file) starting!", s.cfg.MyID)
 	var chunkCount int64
@@ -103,7 +130,6 @@ func (s *PeerServerClass) SendFile(stream pb.Peer_SendFileServer) (err error) {
 				// we are assuming that this never happens!
 				panic("we need to save this last chunk too!")
 			}
-			//p("server doing stream.Recv(); sees err == io.EOF. nk=%p. bytesSeen=%v. chunkCount=%v.", nk, bytesSeen, chunkCount)
 
 			return nil
 		}
@@ -127,15 +153,12 @@ func (s *PeerServerClass) SendFile(stream pb.Peer_SendFileServer) (err error) {
 		}
 
 		hasher.Write(nk.Data)
-		cumul := []byte(hasher.Sum(nil))
+		cumul := hasher.Sum(nil)
 		if 0 != bytes.Compare(cumul, nk.Blake2BCumulative) {
 			return fmt.Errorf("cumulative checksums failed at chunk %v of '%s'. Observed: '%x', expected: '%x'.", nk.ChunkNumber, nk.Filepath, cumul, nk.Blake2BCumulative)
-		} else {
-			//p("cumulative checksum on nk.ChunkNumber=%v looks good; cumul='%x'.  nk.IsLastChunk=%v", nk.ChunkNumber, nk.Blake2BCumulative, nk.IsLastChunk)
 		}
 		if path == "" {
 			path = nk.Filepath
-			//p("peer.Server SendFile sees new file '%s'", path)
 		}
 		if path != "" && path != nk.Filepath {
 			panic(fmt.Errorf("confusing between two different streams! '%s' vs '%s'", path, nk.Filepath))
@@ -145,7 +168,7 @@ func (s *PeerServerClass) SendFile(stream pb.Peer_SendFileServer) (err error) {
 			return fmt.Errorf("%v == nk.SizeInBytes != int64(len(nk.Data)) == %v", nk.SizeInBytes, int64(len(nk.Data)))
 		}
 
-		checksum := blake2bOfBytes(nk.Data)
+		checksum := s.blake2bOfBytes(nk.Data)
 		cmp := bytes.Compare(checksum, nk.Blake2B)
 		if cmp != 0 {
 			return fmt.Errorf("chunk %v bad .Data, checksum mismatch!",
@@ -161,7 +184,7 @@ func (s *PeerServerClass) SendFile(stream pb.Peer_SendFileServer) (err error) {
 		// until ready to store it elsewhere; e.g. in boltdb.
 
 		if writeFileToDisk {
-			err = writeToFd(fd, nk.Data)
+			err = s.writeToFd(fd, nk.Data)
 			if err != nil {
 				return err
 			}
@@ -171,129 +194,18 @@ func (s *PeerServerClass) SendFile(stream pb.Peer_SendFileServer) (err error) {
 			return err
 		}
 
-	} // end for
+	}
 	return nil
 }
 
-func MainExample() {
-
-	myflags := flag.NewFlagSet(ProgramName, flag.ExitOnError)
-	myID := "123"
-	cfg := NewServerConfig(myID)
-	cfg.DefineFlags(myflags)
-
-	sshegoCfg := setupSshFlags(myflags)
-
-	err := myflags.Parse(os.Args[1:])
-
-	if cfg.CpuProfilePath != "" {
-		f, err := os.Create(cfg.CpuProfilePath)
-		if err != nil {
-			log.Fatal(err)
-		}
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
-	}
-
-	err = cfg.ValidateConfig()
-	if err != nil {
-		log.Fatalf("%s command line flag error: '%s'", ProgramName, err)
-	}
-	cfg.SshegoCfg = sshegoCfg
-	//	cfg.StartGrpcServer()
-}
-
-func (cfg *ServerConfig) Stop() {
-	if cfg != nil {
-		cfg.mut.Lock()
-		if cfg.GrpcServer != nil {
-			cfg.GrpcServer.Stop() // race here in Test103BcastGet
-		}
-		cfg.mut.Unlock()
-	}
-}
-
-func (cfg *ServerConfig) StartGrpcServer(
-	peer api.LocalGetSet,
-	sshdReady chan bool,
-	myID string,
-) {
-
-	var gRpcBindPort int
-	var gRpcHost string
-	if cfg.SkipEncryption {
-		// no encryption, only for VPN that already provides it.
-		gRpcBindPort = cfg.ExternalLsnPort
-		gRpcHost = cfg.Host
-
-	} else if cfg.UseTLS {
-		// use TLS
-		gRpcBindPort = cfg.ExternalLsnPort
-		gRpcHost = cfg.Host
-
-		//p("gRPC with TLS listening on %v:%v", gRpcHost, gRpcBindPort)
-
-	} else {
-		// SSH will take the external, gRPC will take the internal.
-		gRpcBindPort = cfg.InternalLsnPort
-		gRpcHost = "127.0.0.1" // local only, behind the SSHD
-
-		//p("%s external SSHd listening on %v:%v, internal gRPC service listening on 127.0.0.1:%v", myID, cfg.Host, cfg.ExternalLsnPort, cfg.InternalLsnPort)
-
-	}
-	lis, err := net.Listen("tcp", fmt.Sprintf("%v:%d", gRpcHost, gRpcBindPort))
-	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
-	}
-
-	var opts []grpc.ServerOption
-
-	if cfg.SkipEncryption {
-		//p("cfg.SkipEncryption is true")
-		close(sshdReady)
-	} else {
-		if cfg.UseTLS {
-			// use TLS
-			creds, err := credentials.NewServerTLSFromFile(cfg.CertPath, cfg.KeyPath)
-			if err != nil {
-				log.Fatalf("Failed to generate credentials %v", err)
-			}
-			opts = []grpc.ServerOption{grpc.Creds(creds)}
-		} else {
-			// use SSH
-			err = serverSshMain(cfg.SshegoCfg, cfg.Host,
-				cfg.ExternalLsnPort, cfg.InternalLsnPort)
-			panicOn(err)
-			close(sshdReady)
-		}
-	}
-
-	cfg.mut.Lock()
-	cfg.GrpcServer = grpc.NewServer(opts...)
-	cls := NewPeerServerClass(peer, cfg)
-	cfg.Cls = cls
-	cfg.mut.Unlock()
-	pb.RegisterPeerServer(cfg.GrpcServer, cls)
-
-	// blocks until shutdown
-	cfg.GrpcServer.Serve(lis)
-}
-
-func blake2bOfBytes(by []byte) []byte {
+func (s *PeerServerClass) blake2bOfBytes(by []byte) []byte {
 	h, err := blake2b.New(nil)
-	panicOn(err)
+	print.PanicOn(err)
 	h.Write(by)
-	return []byte(h.Sum(nil))
+	return h.Sum(nil)
 }
 
-func intMin(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func writeToFd(fd *os.File, data []byte) error {
+func (s *PeerServerClass) writeToFd(fd *os.File, data []byte) error {
 	w := 0
 	n := len(data)
 	for {
@@ -306,4 +218,50 @@ func writeToFd(fd *os.File, data []byte) error {
 			return nil
 		}
 	}
+}
+
+func (c *ServerConfig) DefineFlags(fs *flag.FlagSet) {
+	fs.BoolVar(&c.UseTLS, "tls", false, "Use TLS instead of the default SSH.")
+	fs.BoolVar(&c.SkipEncryption, "skip-encryption", false, "Skip both TLS and SSH; for running on an already encrypted VPN.")
+	fs.StringVar(&c.CertPath, "cert_file", "testdata/server1.pem", "The TLS cert file")
+	fs.StringVar(&c.KeyPath, "key_file", "testdata/server1.key", "The TLS key file")
+	fs.StringVar(&c.Host, "host", "127.0.0.1", "host IP address or name to bind")
+	fs.IntVar(&c.ExternalLsnPort, "externalport", 10000, "The exteral server port")
+	fs.IntVar(&c.InternalLsnPort, "iport", 10001, "The internal server port")
+	fs.StringVar(&c.CpuProfilePath, "cpuprofile", "", "write cpu profile to file")
+}
+
+func (c *ServerConfig) ValidateConfig() error {
+
+	if c.UseTLS {
+		if c.KeyPath == "" {
+			return fmt.Errorf("must provide -key_file under TLS")
+		}
+		if !exists.FileExists(c.KeyPath) {
+			return fmt.Errorf("-key_path '%s' does not exist", c.KeyPath)
+		}
+
+		if c.CertPath == "" {
+			return fmt.Errorf("must provide -key_file under TLS")
+		}
+		if !exists.FileExists(c.CertPath) {
+			return fmt.Errorf("-cert_path '%s' does not exist", c.CertPath)
+		}
+	}
+
+	if !c.UseTLS {
+		lsn, err := net.Listen("tcp", fmt.Sprintf(":%v", c.InternalLsnPort))
+		if err != nil {
+			return fmt.Errorf("internal port %v already bound", c.InternalLsnPort)
+		}
+		lsn.Close()
+	}
+
+	lsnX, err := net.Listen("tcp", fmt.Sprintf(":%v", c.ExternalLsnPort))
+	if err != nil {
+		return fmt.Errorf("external port %v already bound", c.ExternalLsnPort)
+	}
+	lsnX.Close()
+
+	return nil
 }

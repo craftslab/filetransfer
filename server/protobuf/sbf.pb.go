@@ -2,14 +2,16 @@
 // source: sbf.proto
 
 /*
-	Package streambigfile is a generated protocol buffer package.
+Package streambigfile is a generated protocol buffer package.
 
-	It is generated from these files:
-		sbf.proto
+It is generated from these files:
 
-	It has these top-level messages:
-		BigFileChunk
-		BigFileAck
+	sbf.proto
+
+It has these top-level messages:
+
+	BigFileChunk
+	BigFileAck
 */
 package protobuf
 

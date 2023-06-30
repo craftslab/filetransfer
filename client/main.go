@@ -12,7 +12,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/craftslab/filetransfer/client/config"
-	"github.com/craftslab/filetransfer/client/grpc"
+	_grpc "github.com/craftslab/filetransfer/client/grpc"
 	"github.com/craftslab/filetransfer/client/print"
 )
 
@@ -50,7 +50,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		pprof.StartCPUProfile(f)
+		_ = pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
 	}
 
@@ -61,13 +61,13 @@ func main() {
 
 	var opts []grpc.DialOption
 	if cfg.UseTLS {
-		cfg.setupTLS(&opts)
+		cfg.SetupTLS(&opts)
 	} else if cfg.SkipEncryption {
 		// no encryption
 		opts = append(opts, grpc.WithInsecure())
 		print.P("client configured to skip encryption.")
 	} else {
-		cfg.setupSSH(&opts)
+		cfg.SetupSSH(&opts)
 	}
 
 	serverAddr := fmt.Sprintf("%v:%v", cfg.ServerHost, cfg.ServerPort)
@@ -79,15 +79,14 @@ func main() {
 	defer conn.Close()
 
 	// SendFile
-	c := client.NewClient(conn)
-	isBcastSet := false
+	c := _grpc.NewClient(conn)
 	myID := "test-client-0"
 	data := []byte("hello peer, it is nice to meet you!!")
-	err = c.runSendFile("file1", data, 3, isBcastSet, myID)
+	err = c.RunSendFile("file1", data, 3, false, myID)
 	print.PanicOn(err)
 
 	data2 := []byte("second set of data should be kept separate!")
-	err = c.runSendFile("file2", data2, 3, isBcastSet, myID)
+	err = c.RunSendFile("file2", data2, 3, false, myID)
 	print.PanicOn(err)
 
 	//n := 1 << 29 // test with 512MB file. Works with up to 1MB or 2MB chunks.
@@ -105,13 +104,13 @@ func main() {
 	// overlap two sends to different paths
 	go func() {
 		if overlap {
-			time.Sleeprint.P(10 * time.Millisecond)
+			time.Sleep(10 * time.Millisecond)
 			print.P("after 10msec of sleep, comencing bigfile3...")
 
-			c2 := newClient(conn)
+			c2 := _grpc.NewClient(conn)
 			t0 := time.Now()
 
-			err = c2.runSendFile("bigfile3", data3, chunkSz, isBcastSet, myID)
+			err = c2.RunSendFile("bigfile3", data3, chunkSz, false, myID)
 			t1 := time.Now()
 			print.PanicOn(err)
 			mb := float64(len(data3)) / float64(1<<20)
@@ -122,7 +121,7 @@ func main() {
 	}()
 
 	t0 := time.Now()
-	err = c.runSendFile("bigfile4", data3, chunkSz, isBcastSet, myID)
+	err = c.RunSendFile("bigfile4", data3, chunkSz, false, myID)
 	t1 := time.Now()
 	print.PanicOn(err)
 	mb := float64(len(data3)) / float64(1<<20)

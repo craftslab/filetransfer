@@ -12,9 +12,7 @@ import (
 	"github.com/glycerine/blake2b" // vendor https://github.com/dchest/blake2b"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 
-	"github.com/craftslab/filetransfer/client/config"
 	"github.com/craftslab/filetransfer/client/print"
 	pb "github.com/craftslab/filetransfer/client/protobuf"
 )
@@ -39,9 +37,7 @@ func (c *client) startNewFile() {
 	c.nextChunk = 0
 }
 
-func (c *client) runSendFile(path string, data []byte, maxChunkSize int, isBcastSet bool, myID string) error {
-	//p("client runSendFile(path='%s') starting", path)
-
+func (c *client) RunSendFile(path string, data []byte, maxChunkSize int, isBcastSet bool, myID string) error {
 	startOfRunSendFile := time.Now().UTC()
 	startOfRunSendFileNanoUint64 := uint64(startOfRunSendFile.UnixNano())
 
@@ -80,7 +76,6 @@ func (c *client) runSendFile(path string, data []byte, maxChunkSize int, isBcast
 		nk.IsLastChunk = (i == lastChunk)
 
 		if err := stream.Send(&nk); err != nil {
-			// EOF?
 			if err == io.EOF {
 				if !nk.IsLastChunk {
 					panic(fmt.Sprintf("'%s' we got io.EOF before "+
@@ -94,7 +89,6 @@ func (c *client) runSendFile(path string, data []byte, maxChunkSize int, isBcast
 	}
 	reply, err := stream.CloseAndRecv()
 	if err != nil {
-		// EOF ??
 		log.Printf("%v.CloseAndRecv() got error %v, want %v. reply=%v", stream, err, nil, reply)
 		return err
 	}
@@ -121,77 +115,4 @@ func intMin(a, b int) int {
 		return a
 	}
 	return b
-}
-
-func (cfg *config.ClientConfig) ClientSendFile(path string, data []byte, isBcastSet bool, myID string) error {
-
-	var opts []grpc.DialOption
-	if cfg.SkipEncryption {
-		opts = append(opts, grpc.WithInsecure())
-	} else {
-		if cfg.UseTLS {
-			cfg.setupTLS(&opts)
-		} else {
-			cfg.setupSSH(&opts)
-		}
-	}
-
-	serverAddr := fmt.Sprintf("%v:%v", cfg.ServerHost, cfg.ServerPort)
-
-	conn, err := grpc.Dial(serverAddr, opts...)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	// SendFile
-	c := newClient(conn)
-
-	chunkSz := 1 << 20
-
-	t0 := time.Now()
-	err = c.runSendFile(path, data, chunkSz, isBcastSet, myID)
-	t1 := time.Now()
-	elap := t1.Sub(t0)
-	if err != nil {
-		log.Printf("%s ClientSendFile: c.runSendFile sees error '%v' after elap %v", myID, err, elap)
-		return err
-	}
-	mb := float64(len(data)) / float64(1<<20)
-	_ = mb
-	_ = elap
-	log.Printf("%s ClientSendFile: elap time to runSendFile(path='%s', len(data)=%v) on %v MB was %v => %.03f MB/sec", myID, path, len(data), mb, elap, mb/(float64(elap)/1e9))
-	return nil
-}
-
-func (cfg *config.ClientConfig) setupTLS(opts *[]grpc.DialOption) {
-	var sn string
-	if cfg.ServerHostOverride != "" {
-		sn = cfg.ServerHostOverride
-	}
-	var creds credentials.TransportCredentials
-	if cfg.CertPath != "" {
-		var err error
-		creds, err = credentials.NewClientTLSFromFile(cfg.CertPath, sn)
-		if err != nil {
-			log.Fatalf("Failed to create TLS credentials %v", err)
-		}
-	} else {
-		creds = credentials.NewClientTLSFromCert(nil, sn)
-	}
-	*opts = append(*opts, grpc.WithTransportCredentials(creds))
-}
-
-func (cfg *config.ClientConfig) setupSSH(opts *[]grpc.DialOption) {
-
-	destAddr := fmt.Sprintf("%v:%v", cfg.ServerInternalHost, cfg.ServerInternalPort)
-
-	dialer, err := clientSshMain(cfg.AllowNewServer, cfg.TestAllowOneshotConnect, cfg.PrivateKeyPath, cfg.ClientKnownHostsPath, cfg.Username, cfg.ServerHost, destAddr, int64(cfg.ServerPort))
-	print.PanicOn(err)
-
-	*opts = append(*opts, grpc.WithDialer(dialer))
-
-	// have to do this too, since we are using an SSH tunnel
-	// that grpc doesn't know about:
-	*opts = append(*opts, grpc.WithInsecure())
 }

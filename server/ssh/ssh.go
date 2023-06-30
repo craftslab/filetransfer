@@ -1,6 +1,6 @@
 package ssh
 
-// code from github.com/glycerine/sshego is
+// code from github.com/devops-filetransfer/sshego is
 // used under the following MIT license.
 /*
 The MIT License (MIT)
@@ -34,16 +34,18 @@ import (
 	"log"
 	"os"
 
-	tun "github.com/glycerine/sshego"
+	tun "github.com/devops-filetransfer/sshego"
+
+	"github.com/craftslab/filetransfer/server/print"
 )
 
-func setupSshFlags(myflags *flag.FlagSet) *tun.SshegoConfig {
+func SetupSshFlags(myflags *flag.FlagSet) *tun.SshegoConfig {
 	cfg := tun.NewSshegoConfig()
 	cfg.DefineFlags(myflags)
 	return cfg
 }
 
-func serverSshMain(cfg *tun.SshegoConfig, host string, securedPort, targetPort int) error {
+func ServerSshMain(cfg *tun.SshegoConfig, host string, securedPort, targetPort int) error {
 
 	if cfg.ShowVersion {
 		fmt.Printf("\n%v\n", tun.SourceVersion())
@@ -61,11 +63,11 @@ func serverSshMain(cfg *tun.SshegoConfig, host string, securedPort, targetPort i
 
 	err := cfg.ValidateConfig()
 	if err != nil {
-		log.Fatalf("%s command line flag error: '%s'", ProgramName, err)
+		log.Fatalf("command line flag error: '%s'", err)
 	}
-	//p("cfg = %#v", cfg)
+
 	h, err := tun.NewKnownHosts(cfg.ClientKnownHostsPath, tun.KHJson)
-	panicOn(err)
+	print.PanicOn(err)
 	cfg.KnownHosts = h
 
 	if cfg.AddUser != "" {
@@ -79,11 +81,11 @@ func serverSshMain(cfg *tun.SshegoConfig, host string, securedPort, targetPort i
 	log.Printf("grpc-demo/server/ssh.go is starting -esshd with addr: %s", cfg.EmbeddedSSHd.Addr)
 	err = cfg.EmbeddedSSHd.ParseAddr()
 	if err != nil {
-		p("grpc-demo/server/ssh.go cfg.EmbeddedSSHd.ParseAddr() error = '%s'", err)
+		print.P("grpc-demo/server/ssh.go cfg.EmbeddedSSHd.ParseAddr() error = '%s'", err)
 		return err
 	}
 	cfg.NewEsshd()
-	p("grpc-demo/server/ssh.go about to call cfg.Esshd.Start()")
+	print.P("grpc-demo/server/ssh.go about to call cfg.Esshd.Start()")
 	go cfg.Esshd.Start(context.Background())
 
 	return nil

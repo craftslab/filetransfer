@@ -27,7 +27,6 @@ type Peerface interface {
 // calls below determines if we return the Val
 // on Get calls. Val must always be provided
 // on Set.
-//
 type KeyInv struct {
 	Key     []byte
 	Who     string

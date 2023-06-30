@@ -3,10 +3,10 @@ module github.com/craftslab/filetransfer/server
 go 1.20
 
 require (
+	github.com/devops-filetransfer/sshego v7.0.4+incompatible
 	github.com/glycerine/bchan v0.0.0-20170210221909-ad30cd867e1c
 	github.com/glycerine/blake2b v0.0.0-20151022103502-3c8c640cd7be
 	github.com/glycerine/idem v0.0.0-20190127113923-7a8083893311
-	github.com/glycerine/sshego v7.0.3+incompatible
 	github.com/golang/protobuf v1.5.3
 	github.com/tinylib/msgp v1.1.8
 	golang.org/x/net v0.11.0
@@ -24,6 +24,7 @@ require (
 	github.com/glycerine/goconvey v0.0.0-20190410193231-58a59202ab31 // indirect
 	github.com/glycerine/greenpack v5.1.1+incompatible // indirect
 	github.com/glycerine/rbuf v0.0.0-20190314090850-75b78581bebe // indirect
+	github.com/glycerine/sshego v7.0.3+incompatible // indirect
 	github.com/glycerine/xcryptossh v7.0.4+incompatible // indirect
 	github.com/gobuffalo/envy v1.10.2 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
@@ -31,7 +32,6 @@ require (
 	github.com/joho/godotenv v1.4.0 // indirect
 	github.com/jtolds/gls v4.20.0+incompatible // indirect
 	github.com/kr/pty v1.1.8 // indirect
-	github.com/mailgun/log v0.0.0-20150926000944-2f35a4607f1a // indirect
 	github.com/mailgun/mailgun-go v2.0.0+incompatible // indirect
 	github.com/onsi/ginkgo v1.16.5 // indirect
 	github.com/onsi/gomega v1.27.8 // indirect
@@ -45,5 +45,4 @@ require (
 	golang.org/x/text v0.10.0 // indirect
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1 // indirect
 	google.golang.org/protobuf v1.30.0 // indirect
-	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )

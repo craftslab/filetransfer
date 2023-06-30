@@ -3,9 +3,14 @@ package config
 import (
 	"flag"
 	"fmt"
+	"log"
 	"os"
 
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+
 	"github.com/craftslab/filetransfer/client/exists"
+	"github.com/craftslab/filetransfer/client/ssh"
 )
 
 type ClientConfig struct {
@@ -76,4 +81,38 @@ func (c *ClientConfig) ValidateConfig() error {
 	}
 
 	return nil
+}
+
+func (c *ClientConfig) SetupTLS(opts *[]grpc.DialOption) {
+	var sn string
+	if c.ServerHostOverride != "" {
+		sn = c.ServerHostOverride
+	}
+	var creds credentials.TransportCredentials
+	if c.CertPath != "" {
+		var err error
+		creds, err = credentials.NewClientTLSFromFile(c.CertPath, sn)
+		if err != nil {
+			log.Fatalf("Failed to create TLS credentials %v", err)
+		}
+	} else {
+		creds = credentials.NewClientTLSFromCert(nil, sn)
+	}
+	*opts = append(*opts, grpc.WithTransportCredentials(creds))
+}
+
+func (c *ClientConfig) SetupSSH(opts *[]grpc.DialOption) {
+
+	destAddr := fmt.Sprintf("%v:%v", c.ServerInternalHost, c.ServerInternalPort)
+
+	dialer, err := ssh.ClientSshMain(c.AllowNewServer, c.TestAllowOneshotConnect, c.PrivateKeyPath, c.ClientKnownHostsPath, c.Username, c.ServerHost, destAddr, int64(c.ServerPort))
+	if err != nil {
+		log.Fatalf("Failed to invoke clientSshMain %v", err)
+	}
+
+	*opts = append(*opts, grpc.WithDialer(dialer))
+
+	// have to do this too, since we are using an SSH tunnel
+	// that grpc doesn't know about:
+	*opts = append(*opts, grpc.WithInsecure())
 }
