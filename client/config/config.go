@@ -113,7 +113,8 @@ func (c *ClientConfig) SetupSSH(opts *[]grpc.DialOption) {
 		log.Fatalf("Failed to invoke clientSshMain %v", err)
 	}
 
-	*opts = append(*opts, grpc.WithContextDialer(dialer))
+	// nolint:staticcheck
+	*opts = append(*opts, grpc.WithDialer(dialer))
 
 	// have to do this too, since we are using an SSH tunnel
 	// that grpc doesn't know about:
