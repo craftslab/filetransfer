@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/craftslab/filetransfer/client/config"
 	_grpc "github.com/craftslab/filetransfer/client/grpc"
@@ -67,7 +68,7 @@ func main() {
 		cfg.SetupTLS(&opts)
 	} else if cfg.SkipEncryption {
 		// no encryption
-		opts = append(opts, grpc.WithInsecure())
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		print.P("client configured to skip encryption.")
 	} else {
 		cfg.SetupSSH(&opts)

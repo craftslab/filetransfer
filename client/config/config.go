@@ -8,6 +8,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/craftslab/filetransfer/client/exists"
 	"github.com/craftslab/filetransfer/client/ssh"
@@ -112,9 +113,9 @@ func (c *ClientConfig) SetupSSH(opts *[]grpc.DialOption) {
 		log.Fatalf("Failed to invoke clientSshMain %v", err)
 	}
 
-	*opts = append(*opts, grpc.WithDialer(dialer))
+	*opts = append(*opts, grpc.WithContextDialer(dialer))
 
 	// have to do this too, since we are using an SSH tunnel
 	// that grpc doesn't know about:
-	*opts = append(*opts, grpc.WithInsecure())
+	*opts = append(*opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 }
