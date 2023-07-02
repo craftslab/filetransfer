@@ -9,9 +9,10 @@ import (
 	"log"
 	"time"
 
-	"github.com/glycerine/blake2b" // vendor https://github.com/dchest/blake2b"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+
+	"github.com/devops-filetransfer/blake2b"
 
 	"github.com/craftslab/filetransfer/client/print"
 	pb "github.com/craftslab/filetransfer/client/protobuf"
@@ -26,6 +27,7 @@ type client struct {
 func NewClient(conn *grpc.ClientConn) *client {
 	h, err := blake2b.New(nil)
 	print.PanicOn(err)
+
 	return &client{
 		hasher:     h,
 		peerClient: pb.NewPeerClient(conn),
@@ -46,19 +48,23 @@ func (c *client) RunSendFile(path string, data []byte, maxChunkSize int, isBcast
 	if err != nil {
 		log.Fatalf("%v.SendFile(_) = _, %v", c.peerClient, err)
 	}
+
 	n := len(data)
 	numChunk := n / maxChunkSize
 	if n%maxChunkSize > 0 {
 		numChunk++
 	}
+
 	nextByte := 0
 	lastChunk := numChunk - 1
+
 	for i := 0; i < numChunk; i++ {
 		sendLen := intMin(maxChunkSize, n-(i*maxChunkSize))
 		chunk := data[nextByte:(nextByte + sendLen)]
 		nextByte += sendLen
 
 		var nk pb.BigFileChunk
+
 		nk.IsBcastSet = isBcastSet
 		nk.Filepath = path
 		nk.SizeInBytes = int64(sendLen)
@@ -87,6 +93,7 @@ func (c *client) RunSendFile(path string, data []byte, maxChunkSize int, isBcast
 			panic(err)
 		}
 	}
+
 	reply, err := stream.CloseAndRecv()
 	if err != nil {
 		log.Printf("%v.CloseAndRecv() got error %v, want %v. reply=%v", stream, err, nil, reply)
@@ -106,7 +113,9 @@ func (c *client) RunSendFile(path string, data []byte, maxChunkSize int, isBcast
 func blake2bOfBytes(by []byte) []byte {
 	h, err := blake2b.New(nil)
 	print.PanicOn(err)
+
 	h.Write(by)
+
 	return []byte(h.Sum(nil))
 }
 
@@ -114,5 +123,6 @@ func intMin(a, b int) int {
 	if a < b {
 		return a
 	}
+
 	return b
 }

@@ -34,19 +34,18 @@ import (
 	"log"
 	"os"
 
+	"github.com/devops-filetransfer/filetransfer/server/print"
 	tun "github.com/devops-filetransfer/sshego"
-
-	"github.com/craftslab/filetransfer/server/print"
 )
 
 func SetupSshFlags(myflags *flag.FlagSet) *tun.SshegoConfig {
 	cfg := tun.NewSshegoConfig()
 	cfg.DefineFlags(myflags)
+
 	return cfg
 }
 
 func ServerSshMain(cfg *tun.SshegoConfig, host string, securedPort, targetPort int) error {
-
 	if cfg.ShowVersion {
 		fmt.Printf("\n%v\n", tun.SourceVersion())
 		os.Exit(0)
@@ -68,6 +67,7 @@ func ServerSshMain(cfg *tun.SshegoConfig, host string, securedPort, targetPort i
 
 	h, err := tun.NewKnownHosts(cfg.ClientKnownHostsPath, tun.KHJson)
 	print.PanicOn(err)
+
 	cfg.KnownHosts = h
 
 	if cfg.AddUser != "" {
@@ -79,13 +79,16 @@ func ServerSshMain(cfg *tun.SshegoConfig, host string, securedPort, targetPort i
 	}
 
 	log.Printf("grpc-demo/server/ssh.go is starting -esshd with addr: %s", cfg.EmbeddedSSHd.Addr)
+
 	err = cfg.EmbeddedSSHd.ParseAddr()
 	if err != nil {
 		print.P("grpc-demo/server/ssh.go cfg.EmbeddedSSHd.ParseAddr() error = '%s'", err)
 		return err
 	}
+
 	cfg.NewEsshd()
 	print.P("grpc-demo/server/ssh.go about to call cfg.Esshd.Start()")
+
 	go cfg.Esshd.Start(context.Background())
 
 	return nil

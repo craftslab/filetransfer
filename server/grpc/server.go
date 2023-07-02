@@ -13,16 +13,16 @@ import (
 	"sync"
 	"time"
 
-	tun "github.com/devops-filetransfer/sshego"
-	"github.com/glycerine/bchan"
-	"github.com/glycerine/blake2b" // vendor https://github.com/dchest/blake2b"
-	"github.com/glycerine/idem"
 	"google.golang.org/grpc"
 
-	"github.com/craftslab/filetransfer/server/api"
-	"github.com/craftslab/filetransfer/server/exists"
-	"github.com/craftslab/filetransfer/server/print"
-	pb "github.com/craftslab/filetransfer/server/protobuf"
+	"github.com/devops-filetransfer/bchan"
+	"github.com/devops-filetransfer/blake2b"
+	"github.com/devops-filetransfer/filetransfer/server/api"
+	"github.com/devops-filetransfer/filetransfer/server/exists"
+	"github.com/devops-filetransfer/filetransfer/server/print"
+	pb "github.com/devops-filetransfer/filetransfer/server/protobuf"
+	"github.com/devops-filetransfer/idem"
+	tun "github.com/devops-filetransfer/sshego"
 )
 
 type ServerConfig struct {
@@ -74,18 +74,20 @@ func (s *PeerServerClass) IncrementGotFileCount() {
 	s.filesReceivedCount++
 	count := s.filesReceivedCount
 	s.mut.Unlock()
+
 	s.GotFile.Bcast(count)
 }
 
-// implement pb.PeerServer interface; the server is receiving a file here,
+// Implement pb.PeerServer interface; the server is receiving a file here,
 // because the client called SendFile() on the other end.
-func (s *PeerServerClass) SendFile(stream pb.Peer_SendFileServer) (err error) {
-	log.Printf("%s peer.Server SendFile (for receiving a file) starting!", s.cfg.MyID)
+func (s *PeerServerClass) SendFile(stream pb.Peer_SendFileServer) error {
 	var chunkCount int64
 	path := ""
 	var hasher hash.Hash
 
-	hasher, err = blake2b.New(nil)
+	log.Printf("%s peer.Server SendFile (for receiving a file) starting!", s.cfg.MyID)
+
+	hasher, err := blake2b.New(nil)
 	if err != nil {
 		return err
 	}
@@ -97,12 +99,14 @@ func (s *PeerServerClass) SendFile(stream pb.Peer_SendFileServer) (err error) {
 
 	defer func() {
 		if fd != nil {
-			fd.Close()
+			_ = fd.Close()
 		}
+
 		finalChecksum = []byte(hasher.Sum(nil))
 		endTime := time.Now()
 
 		log.Printf("%s this server.SendFile() call got %v chunks, byteCount=%v. with final checksum '%x'. defer running/is returning with err='%v'", s.cfg.MyID, chunkCount, bytesSeen, finalChecksum, err)
+
 		errStr := ""
 		if err != nil {
 			errStr = err.Error()
@@ -127,10 +131,8 @@ func (s *PeerServerClass) SendFile(stream pb.Peer_SendFileServer) (err error) {
 		nk, err = stream.Recv()
 		if err == io.EOF {
 			if nk != nil && len(nk.Data) > 0 {
-				// we are assuming that this never happens!
 				panic("we need to save this last chunk too!")
 			}
-
 			return nil
 		}
 		if err != nil {
@@ -139,14 +141,15 @@ func (s *PeerServerClass) SendFile(stream pb.Peer_SendFileServer) (err error) {
 
 		// INVAR: we have a chunk
 		if !firstChunkSeen {
-
 			if nk.Filepath != "" {
 				if writeFileToDisk {
 					fd, err = os.Create(nk.Filepath + fmt.Sprintf("__%v", time.Now()))
 					if err != nil {
 						return err
 					}
-					defer fd.Close()
+					defer func(fd *os.File) {
+						_ = fd.Close()
+					}(fd)
 				}
 			}
 			firstChunkSeen = true
@@ -157,9 +160,11 @@ func (s *PeerServerClass) SendFile(stream pb.Peer_SendFileServer) (err error) {
 		if 0 != bytes.Compare(cumul, nk.Blake2BCumulative) {
 			return fmt.Errorf("cumulative checksums failed at chunk %v of '%s'. Observed: '%x', expected: '%x'.", nk.ChunkNumber, nk.Filepath, cumul, nk.Blake2BCumulative)
 		}
+
 		if path == "" {
 			path = nk.Filepath
 		}
+
 		if path != "" && path != nk.Filepath {
 			panic(fmt.Errorf("confusing between two different streams! '%s' vs '%s'", path, nk.Filepath))
 		}
@@ -193,21 +198,22 @@ func (s *PeerServerClass) SendFile(stream pb.Peer_SendFileServer) (err error) {
 		if nk.IsLastChunk {
 			return err
 		}
-
 	}
-	return nil
 }
 
 func (s *PeerServerClass) blake2bOfBytes(by []byte) []byte {
 	h, err := blake2b.New(nil)
 	print.PanicOn(err)
+
 	h.Write(by)
+
 	return h.Sum(nil)
 }
 
 func (s *PeerServerClass) writeToFd(fd *os.File, data []byte) error {
 	w := 0
 	n := len(data)
+
 	for {
 		nw, err := fd.Write(data[w:])
 		if err != nil {
@@ -232,11 +238,11 @@ func (c *ServerConfig) DefineFlags(fs *flag.FlagSet) {
 }
 
 func (c *ServerConfig) ValidateConfig() error {
-
 	if c.UseTLS {
 		if c.KeyPath == "" {
 			return fmt.Errorf("must provide -key_file under TLS")
 		}
+
 		if !exists.FileExists(c.KeyPath) {
 			return fmt.Errorf("-key_path '%s' does not exist", c.KeyPath)
 		}
@@ -244,6 +250,7 @@ func (c *ServerConfig) ValidateConfig() error {
 		if c.CertPath == "" {
 			return fmt.Errorf("must provide -key_file under TLS")
 		}
+
 		if !exists.FileExists(c.CertPath) {
 			return fmt.Errorf("-cert_path '%s' does not exist", c.CertPath)
 		}
@@ -254,14 +261,14 @@ func (c *ServerConfig) ValidateConfig() error {
 		if err != nil {
 			return fmt.Errorf("internal port %v already bound", c.InternalLsnPort)
 		}
-		lsn.Close()
+		_ = lsn.Close()
 	}
 
 	lsnX, err := net.Listen("tcp", fmt.Sprintf(":%v", c.ExternalLsnPort))
 	if err != nil {
 		return fmt.Errorf("external port %v already bound", c.ExternalLsnPort)
 	}
-	lsnX.Close()
+	_ = lsnX.Close()
 
 	return nil
 }

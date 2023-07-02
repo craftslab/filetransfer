@@ -10,8 +10,10 @@ func FileExists(name string) bool {
 	if err != nil {
 		return false
 	}
+
 	if fi.IsDir() {
 		return false
 	}
+
 	return true
 }

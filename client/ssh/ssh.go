@@ -42,7 +42,6 @@ elap time to send 512 MB was 13.484078385s => 37.971 MB/sec
 elap time to send 512 MB was 10.078974477s => 50.799 MB/sec
 */
 func ClientSshMain(trustNewServer, testAllowOneshotConnect bool, rsaPrivateKeyPath, knownHostsPath, username, host, destHostPort string, serverExternalPort int64) (func(string, time.Duration) (net.Conn, error), error) {
-
 	dc := tun.DialConfig{
 		ClientKnownHostsPath: knownHostsPath,
 		Mylogin:              username,

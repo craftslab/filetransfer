@@ -12,18 +12,18 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	"github.com/craftslab/filetransfer/server/api"
-	_grpc "github.com/craftslab/filetransfer/server/grpc"
-	"github.com/craftslab/filetransfer/server/print"
-	pb "github.com/craftslab/filetransfer/server/protobuf"
-	"github.com/craftslab/filetransfer/server/ssh"
+	"github.com/devops-filetransfer/filetransfer/server/api"
+	_grpc "github.com/devops-filetransfer/filetransfer/server/grpc"
+	"github.com/devops-filetransfer/filetransfer/server/print"
+	pb "github.com/devops-filetransfer/filetransfer/server/protobuf"
+	"github.com/devops-filetransfer/filetransfer/server/ssh"
 )
 
 const ProgramName = "server"
 
 func main() {
-
 	myflags := flag.NewFlagSet(ProgramName, flag.ExitOnError)
+
 	cfg := &_grpc.ServerConfig{}
 	cfg.DefineFlags(myflags)
 	cfg.SkipEncryption = true
@@ -50,25 +50,21 @@ func main() {
 
 	var gRpcBindPort int
 	var gRpcHost string
+
 	if cfg.UseTLS {
 		// use TLS
 		gRpcBindPort = cfg.ExternalLsnPort
 		gRpcHost = cfg.Host
-
 		print.P("gRPC with TLS listening on %v:%v", gRpcHost, gRpcBindPort)
-
 	} else if cfg.SkipEncryption {
 		// no encryption at all
 		gRpcBindPort = cfg.ExternalLsnPort
 		gRpcHost = cfg.Host
-
 	} else {
 		// SSH will take the external, gRPC will take the internal.
 		gRpcBindPort = cfg.InternalLsnPort
 		gRpcHost = "127.0.0.1" // local only, behind the SSHD
-
 		print.P("external SSHd listening on %v:%v, internal gRPC service listening on 127.0.0.1:%v", cfg.Host, cfg.ExternalLsnPort, cfg.InternalLsnPort)
-
 	}
 
 	lis, err := net.Listen("tcp", fmt.Sprintf("%v:%d", gRpcHost, gRpcBindPort))
@@ -89,10 +85,8 @@ func main() {
 		// no encryption
 		print.P("server configured to skip encryption.")
 	} else {
-
 		// use SSH
-		err = ssh.ServerSshMain(sshegoCfg, cfg.Host,
-			cfg.ExternalLsnPort, cfg.InternalLsnPort)
+		err = ssh.ServerSshMain(sshegoCfg, cfg.Host, cfg.ExternalLsnPort, cfg.InternalLsnPort)
 		print.PanicOn(err)
 	}
 

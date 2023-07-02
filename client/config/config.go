@@ -63,7 +63,6 @@ func (c *ClientConfig) DefineFlags(fs *flag.FlagSet) {
 }
 
 func (c *ClientConfig) ValidateConfig() error {
-
 	if c.UseTLS {
 		if c.KeyPath == "" {
 			return fmt.Errorf("must provide -key_file under TLS")
@@ -85,10 +84,13 @@ func (c *ClientConfig) ValidateConfig() error {
 
 func (c *ClientConfig) SetupTLS(opts *[]grpc.DialOption) {
 	var sn string
+
 	if c.ServerHostOverride != "" {
 		sn = c.ServerHostOverride
 	}
+
 	var creds credentials.TransportCredentials
+
 	if c.CertPath != "" {
 		var err error
 		creds, err = credentials.NewClientTLSFromFile(c.CertPath, sn)
@@ -98,11 +100,11 @@ func (c *ClientConfig) SetupTLS(opts *[]grpc.DialOption) {
 	} else {
 		creds = credentials.NewClientTLSFromCert(nil, sn)
 	}
+
 	*opts = append(*opts, grpc.WithTransportCredentials(creds))
 }
 
 func (c *ClientConfig) SetupSSH(opts *[]grpc.DialOption) {
-
 	destAddr := fmt.Sprintf("%v:%v", c.ServerInternalHost, c.ServerInternalPort)
 
 	dialer, err := ssh.ClientSshMain(c.AllowNewServer, c.TestAllowOneshotConnect, c.PrivateKeyPath, c.ClientKnownHostsPath, c.Username, c.ServerHost, destAddr, int64(c.ServerPort))

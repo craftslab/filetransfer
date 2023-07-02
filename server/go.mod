@@ -1,12 +1,12 @@
-module github.com/craftslab/filetransfer/server
+module github.com/devops-filetransfer/filetransfer/server
 
 go 1.20
 
 require (
+	github.com/devops-filetransfer/bchan v0.0.0-20170210221909-ad30cd867e1c
+	github.com/devops-filetransfer/blake2b v0.0.0-20170307141222-06006a921c7d
+	github.com/devops-filetransfer/idem v0.0.0-20190127113923-7a8083893311
 	github.com/devops-filetransfer/sshego v7.0.4+incompatible
-	github.com/glycerine/bchan v0.0.0-20170210221909-ad30cd867e1c
-	github.com/glycerine/blake2b v0.0.0-20151022103502-3c8c640cd7be
-	github.com/glycerine/idem v0.0.0-20190127113923-7a8083893311
 	github.com/golang/protobuf v1.5.3
 	github.com/tinylib/msgp v1.1.8
 	golang.org/x/net v0.11.0
@@ -20,6 +20,7 @@ require (
 	github.com/facebookgo/ensure v0.0.0-20200202191622-63f1cf65ac4c // indirect
 	github.com/facebookgo/stack v0.0.0-20160209184415-751773369052 // indirect
 	github.com/facebookgo/subset v0.0.0-20200203212716-c811ad88dec4 // indirect
+	github.com/glycerine/bchan v0.0.0-20170210221909-ad30cd867e1c // indirect
 	github.com/glycerine/go-unsnap-stream v0.0.0-20210130063903-47dfef350d96 // indirect
 	github.com/glycerine/goconvey v0.0.0-20190410193231-58a59202ab31 // indirect
 	github.com/glycerine/greenpack v5.1.1+incompatible // indirect

@@ -24,18 +24,20 @@ func SequentialPayload(n int64) []byte {
 	k := uint64(n / 8)
 	by := make([]byte, n)
 	j := uint64(0)
+
 	for i := uint64(0); i < k; i++ {
 		j = i * 8
 		binary.LittleEndian.PutUint64(by[j:j+8], j)
 	}
+
 	return by
 }
 
 const ProgramName = "client"
 
 func main() {
-
 	myflags := flag.NewFlagSet(ProgramName, flag.ContinueOnError)
+
 	cfg := &config.ClientConfig{}
 	cfg.DefineFlags(myflags)
 	cfg.SkipEncryption = true
@@ -60,6 +62,7 @@ func main() {
 	}
 
 	var opts []grpc.DialOption
+
 	if cfg.UseTLS {
 		cfg.SetupTLS(&opts)
 	} else if cfg.SkipEncryption {
@@ -122,9 +125,12 @@ func main() {
 
 	t0 := time.Now()
 	err = c.RunSendFile("bigfile4", data3, chunkSz, false, myID)
+
 	t1 := time.Now()
 	print.PanicOn(err)
+
 	mb := float64(len(data3)) / float64(1<<20)
+
 	elap := t1.Sub(t0)
 	print.P("c: elap time to send %v MB was %v => %.03f MB/sec", mb, elap, mb/(float64(elap)/1e9))
 
