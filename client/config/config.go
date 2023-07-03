@@ -10,8 +10,8 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/craftslab/filetransfer/client/exists"
-	"github.com/craftslab/filetransfer/client/ssh"
+	"github.com/devops-filetransfer/filetransfer/client/exists"
+	"github.com/devops-filetransfer/filetransfer/client/ssh"
 )
 
 type ClientConfig struct {

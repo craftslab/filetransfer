@@ -14,8 +14,8 @@ import (
 
 	"github.com/devops-filetransfer/blake2b"
 
-	"github.com/craftslab/filetransfer/client/print"
-	pb "github.com/craftslab/filetransfer/client/protobuf"
+	"github.com/devops-filetransfer/filetransfer/client/print"
+	pb "github.com/devops-filetransfer/filetransfer/client/protobuf"
 )
 
 type client struct {

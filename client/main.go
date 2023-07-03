@@ -12,9 +12,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/craftslab/filetransfer/client/config"
-	_grpc "github.com/craftslab/filetransfer/client/grpc"
-	"github.com/craftslab/filetransfer/client/print"
+	"github.com/devops-filetransfer/filetransfer/client/config"
+	_grpc "github.com/devops-filetransfer/filetransfer/client/grpc"
+	"github.com/devops-filetransfer/filetransfer/client/print"
 )
 
 func SequentialPayload(n int64) []byte {
